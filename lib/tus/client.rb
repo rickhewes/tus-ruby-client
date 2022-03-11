@@ -12,7 +12,8 @@ module Tus
     TUS_VERSION = '1.0.0'
     NUM_RETRIES = 5
 
-    def initialize(server_url)
+    def initialize(server_url, chunk_size = CHUNK_SIZE)
+      @chunk_size = chunk_size
       @server_uri = URI.parse(server_url)
 
       # better to open the connection now
@@ -21,26 +22,26 @@ module Tus
       @capabilities = capabilities
     end
 
-    def upload(file_path, metadata = nil)
+    def upload(file_path)
       raise 'No such file!' unless File.file?(file_path)
 
       file_name = File.basename(file_path)
       file_size = File.size(file_path)
       io = File.open(file_path, 'rb')
 
-      upload_by_io(file_name: file_name, file_size: file_size, io: io, metadata: metadata)
+      upload_by_io(file_name: file_name, file_size: file_size, io: io)
     end
 
-    def upload_by_io(file_name:, file_size:, io:, metadata:)
+    def upload_by_io(file_name:, file_size:, io:)
       raise 'Cannot upload a stream of unknown size!' unless file_size
 
-      uri = create_remote(file_name, file_size, metadata)
+      uri = create_remote(file_name, file_size)
       # we use only parameters that are known to the server
       offset, length = upload_parameters(uri)
 
       chunks = Enumerator.new do |yielder|
         loop do
-          chunk = io.read(CHUNK_SIZE)
+          chunk = io.read(@chunk_size)
 
           break unless chunk
 
@@ -71,20 +72,16 @@ module Tus
       response['Tus-Extension']&.split(',')
     end
 
-    def create_remote(file_name, file_size, metadata)
+    def create_remote(file_name, file_size)
       unless @capabilities.include?('creation')
         raise 'New file uploading is not supported!'
       end
-
-      metadata ||= {}
-      metadata[:filename] = file_name
-      metadata_pairs = metadata.map { |key, value| "#{key} #{Base64.strict_encode64(value)}" }
 
       request = Net::HTTP::Post.new(@server_uri.request_uri)
       request['Content-Length'] = 0
       request['Upload-Length'] = file_size
       request['Tus-Resumable'] = TUS_VERSION
-      request['Upload-Metadata'] = metadata_pairs.join(',')
+      request['Upload-Metadata'] = request['Upload-Metadata'] = "filename: #{Base64.strict_encode64(file_name)},is_confidential"
 
       response = nil
 
