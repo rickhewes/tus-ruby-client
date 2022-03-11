@@ -81,7 +81,7 @@ module Tus
       request['Content-Length'] = 0
       request['Upload-Length'] = file_size
       request['Tus-Resumable'] = TUS_VERSION
-      request['Upload-Metadata'] = request['Upload-Metadata'] = "filename: #{Base64.strict_encode64(file_name)},is_confidential"
+      request['Upload-Metadata'] = "filename: #{Base64.strict_encode64(file_name)},is_confidential"
 
       response = nil
 
